@@ -1,0 +1,26 @@
+# CSV Analyzer with PandasAI - Requirements
+# Install: pip install -r requirements.txt
+
+# Core Flask
+flask==3.0.0
+flask-cors==4.0.0
+werkzeug==3.0.1
+
+# Data Analysis
+pandas==2.1.3
+numpy==1.26.2
+
+# Visualization
+matplotlib==3.8.2
+seaborn==0.13.0
+
+# PandasAI for natural language queries
+pandasai==1.5.17
+
+# OpenAI (required for PandasAI)
+openai==1.3.5
+
+# Optional: Other LLM providers
+# anthropic
+# google-generativeai
+backend/requirements.txt

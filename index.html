@@ -1,0 +1,908 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CSV Analyzer with PandasAI</title>
+  <script type="module" src="/src/main.js"></script>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: system-ui, -apple-system, sans-serif; background: #0f172a; color: #e2e8f0; min-height: 100vh; }
+    .container { max-width: 1200px; margin: 0 auto; padding: 20px; }
+    h1 { text-align: center; margin-bottom: 20px; color: #38bdf8; }
+
+    /* Tabs */
+    .tabs { display: flex; gap: 10px; margin-bottom: 20px; flex-wrap: wrap; }
+    .tab { padding: 10px 20px; background: #1e293b; border: none; color: #94a3b8; cursor: pointer; border-radius: 8px; font-size: 14px; }
+    .tab:hover { background: #334155; }
+    .tab.active { background: #3b82f6; color: white; }
+
+    /* Panels */
+    .panel { display: none; background: #1e293b; padding: 20px; border-radius: 12px; }
+    .panel.active { display: block; }
+
+    /* Upload */
+    .upload-zone { border: 2px dashed #475569; border-radius: 12px; padding: 60px; text-align: center; cursor: pointer; transition: all 0.3s; }
+    .upload-zone:hover { border-color: #3b82f6; background: #1e3a5f; }
+    .upload-zone.dragover { border-color: #22c55e; background: #14532d; }
+    .upload-zone input { display: none; }
+    .upload-zone h3 { margin-bottom: 10px; }
+    .upload-zone p { color: #64748b; }
+
+    /* Status */
+    .status { margin-top: 15px; padding: 12px; border-radius: 8px; display: none; }
+    .status.success { display: block; background: #14532d; color: #4ade80; }
+    .status.error { display: block; background: #450a0a; color: #f87171; }
+    .status.loading { display: block; background: #1e3a8a; color: #60a5fa; }
+
+    /* EDA */
+    .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 15px; margin-bottom: 20px; }
+    .stat-card { background: #0f172a; padding: 15px; border-radius: 8px; text-align: center; }
+    .stat-card h4 { color: #64748b; font-size: 12px; margin-bottom: 5px; }
+    .stat-card p { font-size: 24px; font-weight: bold; color: #38bdf8; }
+
+    /* Tables */
+    .table-container { overflow-x: auto; margin-top: 15px; }
+    table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    th, td { padding: 10px; text-align: left; border-bottom: 1px solid #334155; }
+    th { background: #0f172a; color: #94a3b8; position: sticky; top: 0; }
+    tr:hover { background: #334155; }
+
+    /* Visualize */
+    .viz-controls { display: flex; gap: 10px; margin-bottom: 20px; flex-wrap: wrap; align-items: flex-end; }
+    .form-group { display: flex; flex-direction: column; gap: 5px; }
+    .form-group label { font-size: 12px; color: #94a3b8; }
+    select, input[type="text"] { padding: 10px; border-radius: 6px; border: 1px solid #475569; background: #0f172a; color: #e2e8f0; min-width: 150px; }
+    button { padding: 10px 20px; background: #3b82f6; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 14px; }
+    button:hover { background: #2563eb; }
+    button:disabled { background: #475569; cursor: not-allowed; }
+
+    .chart-container { text-align: center; margin-top: 20px; }
+    .chart-container img { max-width: 100%; border-radius: 8px; background: white; }
+
+    /* Chat */
+    .chat-container { display: flex; flex-direction: column; height: 500px; }
+    .chat-messages { flex: 1; overflow-y: auto; padding: 15px; background: #0f172a; border-radius: 8px; margin-bottom: 15px; }
+    .message { margin-bottom: 15px; padding: 12px; border-radius: 8px; max-width: 80%; }
+    .message.user { background: #3b82f6; margin-left: auto; }
+    .message.bot { background: #334155; }
+    .message pre { white-space: pre-wrap; word-wrap: break-word; font-size: 13px; margin-top: 8px; background: #1e293b; padding: 10px; border-radius: 4px; }
+    .message img { max-width: 100%; margin-top: 10px; border-radius: 4px; }
+    .chat-input { display: flex; gap: 10px; }
+    .chat-input input { flex: 1; padding: 12px; border-radius: 8px; border: 1px solid #475569; background: #0f172a; color: #e2e8f0; font-size: 14px; }
+
+    /* Backend Code */
+    .code-container { position: relative; }
+    .code-tabs { display: flex; gap: 5px; margin-bottom: 10px; flex-wrap: wrap; }
+    .code-tab { padding: 8px 16px; background: #0f172a; border: none; color: #94a3b8; cursor: pointer; border-radius: 6px 6px 0 0; font-size: 12px; }
+    .code-tab.active { background: #334155; color: #e2e8f0; }
+    pre.code { background: #0f172a; padding: 15px; border-radius: 8px; overflow-x: auto; font-size: 12px; line-height: 1.5; max-height: 500px; overflow-y: auto; }
+    .copy-btn { position: absolute; top: 50px; right: 10px; padding: 6px 12px; font-size: 12px; }
+
+    /* Spinner */
+    .spinner { display: inline-block; width: 20px; height: 20px; border: 2px solid #475569; border-top-color: #3b82f6; border-radius: 50%; animation: spin 1s linear infinite; margin-right: 8px; vertical-align: middle; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    h3 { margin-bottom: 15px; color: #f1f5f9; }
+    .section { margin-bottom: 25px; }
+    .empty { text-align: center; padding: 40px; color: #64748b; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>🐼 CSV Analyzer with PandasAI</h1>
+
+    <div class="tabs">
+      <button class="tab active" data-tab="upload">📁 Upload</button>
+      <button class="tab" data-tab="eda">📊 EDA</button>
+      <button class="tab" data-tab="visualize">📈 Visualize</button>
+      <button class="tab" data-tab="chat">💬 Chat</button>
+      <button class="tab" data-tab="backend">🐍 Backend Code</button>
+    </div>
+
+    <!-- Upload Panel -->
+    <div class="panel active" id="upload">
+      <div class="upload-zone" id="dropZone">
+        <input type="file" id="fileInput" accept=".csv">
+        <h3>📂 Drop your CSV file here</h3>
+        <p>or click to browse</p>
+      </div>
+      <div class="status" id="uploadStatus"></div>
+    </div>
+
+    <!-- EDA Panel -->
+    <div class="panel" id="eda">
+      <div id="edaContent">
+        <div class="empty">Upload a CSV file to see analysis</div>
+      </div>
+    </div>
+
+    <!-- Visualize Panel -->
+    <div class="panel" id="visualize">
+      <div class="viz-controls">
+        <div class="form-group">
+          <label>Chart Type</label>
+          <select id="chartType">
+            <option value="histogram">Histogram</option>
+            <option value="bar">Bar Chart</option>
+            <option value="scatter">Scatter Plot</option>
+            <option value="line">Line Chart</option>
+            <option value="box">Box Plot</option>
+            <option value="pie">Pie Chart</option>
+            <option value="heatmap">Correlation Heatmap</option>
+            <option value="pairplot">Pair Plot</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>X Column</label>
+          <select id="xColumn"></select>
+        </div>
+        <div class="form-group">
+          <label>Y Column (optional)</label>
+          <select id="yColumn"><option value="">-- None --</option></select>
+        </div>
+        <button id="generateChart">Generate Chart</button>
+      </div>
+      <div class="chart-container" id="chartContainer">
+        <div class="empty">Select options and generate a chart</div>
+      </div>
+    </div>
+
+    <!-- Chat Panel -->
+    <div class="panel" id="chat">
+      <div class="chat-container">
+        <div class="chat-messages" id="chatMessages">
+          <div class="message bot">
+            <strong>🤖 PandasAI Assistant</strong><br>
+            Hello! Upload a CSV file and ask me anything about your data. Examples:<br>
+            • "What is the average of column X?"<br>
+            • "Show top 5 rows"<br>
+            • "How many missing values?"<br>
+            • "Create a bar chart of sales"
+          </div>
+        </div>
+        <div class="chat-input">
+          <input type="text" id="chatInput" placeholder="Ask about your data..." disabled>
+          <button id="sendChat" disabled>Send</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Backend Code Panel -->
+    <div class="panel" id="backend">
+      <div class="code-container">
+        <div class="code-tabs">
+          <button class="code-tab active" data-file="app">app.py</button>
+          <button class="code-tab" data-file="utils">pandasai_utils.py</button>
+          <button class="code-tab" data-file="requirements">requirements.txt</button>
+          <button class="code-tab" data-file="readme">README.md</button>
+        </div>
+        <button class="copy-btn" id="copyCode">📋 Copy</button>
+        <pre class="code" id="codeDisplay"></pre>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // ============ CONFIG ============
+    const API_URL = 'http://localhost:5000/api';
+
+    // ============ STATE ============
+    let columns = [];
+    let edaData = null;
+
+    // ============ BACKEND CODE ============
+    const backendCode = {
+      app: `"""
+Flask Backend for CSV Analyzer with PandasAI
+Run: python app.py
+"""
+from flask import Flask, request, jsonify, send_file
+from flask_cors import CORS
+import pandas as pd
+import numpy as np
+import matplotlib
+matplotlib.use('Agg')
+import matplotlib.pyplot as plt
+import seaborn as sns
+import io
+import base64
+import os
+import traceback
+
+app = Flask(__name__)
+CORS(app)
+
+# Global state
+current_df = None
+current_filename = None
+
+# Try to import PandasAI
+try:
+    from pandasai import SmartDataframe
+    from pandasai.llm import OpenAI
+    PANDASAI_AVAILABLE = True
+except ImportError:
+    PANDASAI_AVAILABLE = False
+    print("⚠️ PandasAI not installed. Chat feature disabled.")
+
+def get_smart_df():
+    """Get SmartDataframe for PandasAI queries"""
+    global current_df
+    if current_df is None:
+        return None
+    if not PANDASAI_AVAILABLE:
+        return None
+
+    api_key = os.environ.get('OPENAI_API_KEY')
+    if not api_key:
+        return None
+
+    llm = OpenAI(api_key=api_key)
+    return SmartDataframe(current_df, config={"llm": llm, "verbose": True})
+
+@app.route('/api/health', methods=['GET'])
+def health():
+    return jsonify({
+        "status": "ok",
+        "pandasai": PANDASAI_AVAILABLE,
+        "has_openai_key": bool(os.environ.get('OPENAI_API_KEY'))
+    })
+
+@app.route('/api/upload', methods=['POST'])
+def upload():
+    global current_df, current_filename
+
+    if 'file' not in request.files:
+        return jsonify({"error": "No file provided"}), 400
+
+    file = request.files['file']
+    if file.filename == '':
+        return jsonify({"error": "No file selected"}), 400
+
+    if not file.filename.endswith('.csv'):
+        return jsonify({"error": "Only CSV files allowed"}), 400
+
+    try:
+        current_df = pd.read_csv(file)
+        current_filename = file.filename
+
+        # Perform EDA
+        eda = {
+            "filename": current_filename,
+            "rows": len(current_df),
+            "columns": len(current_df.columns),
+            "column_names": current_df.columns.tolist(),
+            "dtypes": current_df.dtypes.astype(str).to_dict(),
+            "missing": current_df.isnull().sum().to_dict(),
+            "duplicates": int(current_df.duplicated().sum()),
+            "memory_mb": round(current_df.memory_usage(deep=True).sum() / 1024 / 1024, 2),
+            "preview": current_df.head(10).to_dict(orient='records'),
+            "describe": current_df.describe().to_dict()
+        }
+
+        return jsonify({"success": True, "eda": eda})
+
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/visualize', methods=['POST'])
+def visualize():
+    global current_df
+
+    if current_df is None:
+        return jsonify({"error": "No data loaded"}), 400
+
+    data = request.json
+    chart_type = data.get('chart_type', 'histogram')
+    x_col = data.get('x_column')
+    y_col = data.get('y_column')
+
+    try:
+        plt.figure(figsize=(10, 6))
+        plt.style.use('seaborn-v0_8-darkgrid')
+
+        if chart_type == 'histogram':
+            if x_col and x_col in current_df.columns:
+                plt.hist(current_df[x_col].dropna(), bins=30, edgecolor='black', alpha=0.7)
+                plt.xlabel(x_col)
+                plt.ylabel('Frequency')
+                plt.title(f'Histogram of {x_col}')
+
+        elif chart_type == 'bar':
+            if x_col and x_col in current_df.columns:
+                counts = current_df[x_col].value_counts().head(20)
+                plt.bar(counts.index.astype(str), counts.values)
+                plt.xlabel(x_col)
+                plt.ylabel('Count')
+                plt.title(f'Bar Chart of {x_col}')
+                plt.xticks(rotation=45, ha='right')
+
+        elif chart_type == 'scatter':
+            if x_col and y_col and x_col in current_df.columns and y_col in current_df.columns:
+                plt.scatter(current_df[x_col], current_df[y_col], alpha=0.5)
+                plt.xlabel(x_col)
+                plt.ylabel(y_col)
+                plt.title(f'{x_col} vs {y_col}')
+
+        elif chart_type == 'line':
+            if x_col and x_col in current_df.columns:
+                plt.plot(current_df[x_col].values)
+                plt.xlabel('Index')
+                plt.ylabel(x_col)
+                plt.title(f'Line Chart of {x_col}')
+
+        elif chart_type == 'box':
+            if x_col and x_col in current_df.columns:
+                plt.boxplot(current_df[x_col].dropna())
+                plt.ylabel(x_col)
+                plt.title(f'Box Plot of {x_col}')
+
+        elif chart_type == 'pie':
+            if x_col and x_col in current_df.columns:
+                counts = current_df[x_col].value_counts().head(10)
+                plt.pie(counts.values, labels=counts.index, autopct='%1.1f%%')
+                plt.title(f'Pie Chart of {x_col}')
+
+        elif chart_type == 'heatmap':
+            numeric_df = current_df.select_dtypes(include=[np.number])
+            if len(numeric_df.columns) > 1:
+                corr = numeric_df.corr()
+                sns.heatmap(corr, annot=True, cmap='coolwarm', center=0, fmt='.2f')
+                plt.title('Correlation Heatmap')
+
+        elif chart_type == 'pairplot':
+            numeric_df = current_df.select_dtypes(include=[np.number])
+            if len(numeric_df.columns) >= 2:
+                cols = numeric_df.columns[:4].tolist()
+                fig = sns.pairplot(current_df[cols].dropna())
+                buf = io.BytesIO()
+                fig.savefig(buf, format='png', dpi=100, bbox_inches='tight')
+                buf.seek(0)
+                img_base64 = base64.b64encode(buf.read()).decode('utf-8')
+                plt.close('all')
+                return jsonify({"image": f"data:image/png;base64,{img_base64}"})
+
+        plt.tight_layout()
+
+        buf = io.BytesIO()
+        plt.savefig(buf, format='png', dpi=100, bbox_inches='tight')
+        buf.seek(0)
+        img_base64 = base64.b64encode(buf.read()).decode('utf-8')
+        plt.close()
+
+        return jsonify({"image": f"data:image/png;base64,{img_base64}"})
+
+    except Exception as e:
+        plt.close()
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/chat', methods=['POST'])
+def chat():
+    global current_df
+
+    if current_df is None:
+        return jsonify({"error": "No data loaded"}), 400
+
+    data = request.json
+    query = data.get('query', '')
+
+    if not query:
+        return jsonify({"error": "No query provided"}), 400
+
+    if not PANDASAI_AVAILABLE:
+        return jsonify({"error": "PandasAI not installed. Run: pip install pandasai"}), 400
+
+    api_key = os.environ.get('OPENAI_API_KEY')
+    if not api_key:
+        return jsonify({"error": "OPENAI_API_KEY not set"}), 400
+
+    try:
+        smart_df = get_smart_df()
+        result = smart_df.chat(query)
+
+        # Check if result is a figure
+        if isinstance(result, plt.Figure):
+            buf = io.BytesIO()
+            result.savefig(buf, format='png', dpi=100, bbox_inches='tight')
+            buf.seek(0)
+            img_base64 = base64.b64encode(buf.read()).decode('utf-8')
+            plt.close(result)
+            return jsonify({
+                "response": "Here's the chart:",
+                "image": f"data:image/png;base64,{img_base64}"
+            })
+
+        # Convert result to string
+        if isinstance(result, pd.DataFrame):
+            response = result.to_string()
+        elif isinstance(result, pd.Series):
+            response = result.to_string()
+        else:
+            response = str(result)
+
+        return jsonify({"response": response})
+
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/clear', methods=['POST'])
+def clear():
+    global current_df, current_filename
+    current_df = None
+    current_filename = None
+    return jsonify({"success": True})
+
+if __name__ == '__main__':
+    print("=" * 50)
+    print("🐼 CSV Analyzer with PandasAI")
+    print("=" * 50)
+    print(f"PandasAI: {'✅ Available' if PANDASAI_AVAILABLE else '❌ Not installed'}")
+    print(f"OpenAI Key: {'✅ Set' if os.environ.get('OPENAI_API_KEY') else '❌ Not set'}")
+    print("=" * 50)
+    print("Starting server on http://localhost:5000")
+    print("=" * 50)
+    app.run(debug=True, port=5000)
+`,
+
+      utils: `"""
+Advanced PandasAI Utilities
+"""
+import pandas as pd
+import numpy as np
+from typing import Optional, List, Dict, Any
+
+class CSVAnalyzer:
+    """Complete CSV analysis with PandasAI integration"""
+
+    def __init__(self, filepath_or_df):
+        if isinstance(filepath_or_df, str):
+            self.df = pd.read_csv(filepath_or_df)
+        else:
+            self.df = filepath_or_df
+
+        self.smart_df = None
+        self._setup_pandasai()
+
+    def _setup_pandasai(self):
+        """Initialize PandasAI if available"""
+        try:
+            import os
+            from pandasai import SmartDataframe
+            from pandasai.llm import OpenAI
+
+            api_key = os.environ.get('OPENAI_API_KEY')
+            if api_key:
+                llm = OpenAI(api_key=api_key)
+                self.smart_df = SmartDataframe(
+                    self.df,
+                    config={
+                        "llm": llm,
+                        "verbose": True,
+                        "save_charts": True,
+                        "save_charts_path": "charts/"
+                    }
+                )
+        except ImportError:
+            print("PandasAI not available")
+
+    def basic_info(self) -> Dict[str, Any]:
+        """Get basic DataFrame info"""
+        return {
+            "shape": self.df.shape,
+            "columns": self.df.columns.tolist(),
+            "dtypes": self.df.dtypes.astype(str).to_dict(),
+            "memory_mb": self.df.memory_usage(deep=True).sum() / 1024 / 1024
+        }
+
+    def missing_analysis(self) -> pd.DataFrame:
+        """Analyze missing values"""
+        missing = self.df.isnull().sum()
+        missing_pct = (missing / len(self.df)) * 100
+        return pd.DataFrame({
+            'missing_count': missing,
+            'missing_percent': missing_pct
+        }).sort_values('missing_count', ascending=False)
+
+    def numeric_summary(self) -> pd.DataFrame:
+        """Summary statistics for numeric columns"""
+        return self.df.describe()
+
+    def categorical_summary(self) -> Dict[str, pd.Series]:
+        """Value counts for categorical columns"""
+        cat_cols = self.df.select_dtypes(include=['object', 'category']).columns
+        return {col: self.df[col].value_counts() for col in cat_cols}
+
+    def correlation_matrix(self) -> pd.DataFrame:
+        """Correlation matrix for numeric columns"""
+        numeric_df = self.df.select_dtypes(include=[np.number])
+        return numeric_df.corr()
+
+    def detect_outliers(self, column: str, method: str = 'iqr') -> pd.Series:
+        """Detect outliers using IQR or Z-score"""
+        if column not in self.df.columns:
+            raise ValueError(f"Column {column} not found")
+
+        data = self.df[column].dropna()
+
+        if method == 'iqr':
+            Q1, Q3 = data.quantile([0.25, 0.75])
+            IQR = Q3 - Q1
+            lower = Q1 - 1.5 * IQR
+            upper = Q3 + 1.5 * IQR
+            return (data < lower) | (data > upper)
+
+        elif method == 'zscore':
+            z_scores = np.abs((data - data.mean()) / data.std())
+            return z_scores > 3
+
+    def chat(self, query: str) -> Any:
+        """Chat with data using PandasAI"""
+        if self.smart_df is None:
+            raise RuntimeError("PandasAI not configured")
+        return self.smart_df.chat(query)
+
+    def full_report(self) -> Dict[str, Any]:
+        """Generate complete EDA report"""
+        return {
+            "basic_info": self.basic_info(),
+            "missing": self.missing_analysis().to_dict(),
+            "numeric_summary": self.numeric_summary().to_dict(),
+            "categorical_summary": {k: v.to_dict() for k, v in self.categorical_summary().items()},
+            "correlations": self.correlation_matrix().to_dict()
+        }
+
+
+# Example usage
+if __name__ == "__main__":
+    # Create sample data
+    df = pd.DataFrame({
+        'name': ['Alice', 'Bob', 'Charlie', 'David', 'Eve'],
+        'age': [25, 30, 35, 40, 45],
+        'salary': [50000, 60000, 70000, 80000, 90000],
+        'department': ['IT', 'HR', 'IT', 'Finance', 'HR']
+    })
+
+    analyzer = CSVAnalyzer(df)
+    print(analyzer.basic_info())
+    print(analyzer.missing_analysis())
+`,
+
+      requirements: `flask>=2.0.0
+flask-cors>=3.0.0
+pandas>=1.5.0
+numpy>=1.21.0
+matplotlib>=3.5.0
+seaborn>=0.12.0
+pandasai>=1.5.0
+openai>=1.0.0
+python-dotenv>=1.0.0
+`,
+
+      readme: `# CSV Analyzer with PandasAI - Backend
+
+## Quick Start
+
+\`\`\`bash
+# 1. Create virtual environment
+python -m venv venv
+source venv/bin/activate  # Linux/Mac
+venv\\Scripts\\activate     # Windows
+
+# 2. Install dependencies
+pip install -r requirements.txt
+
+# 3. Set OpenAI API key
+export OPENAI_API_KEY='your-api-key-here'
+
+# 4. Run server
+python app.py
+\`\`\`
+
+## API Endpoints
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| /api/health | GET | Health check |
+| /api/upload | POST | Upload CSV file |
+| /api/visualize | POST | Generate charts |
+| /api/chat | POST | PandasAI queries |
+| /api/clear | POST | Clear session |
+
+## Example Chat Queries
+
+- "What is the average of column_name?"
+- "Show the top 10 rows"
+- "How many missing values are there?"
+- "Create a bar chart of sales by region"
+- "What is the correlation between X and Y?"
+- "Group by department and calculate mean salary"
+
+## Visualization Types
+
+- histogram, bar, scatter, line, box, pie
+- heatmap (correlation matrix)
+- pairplot (pairwise relationships)
+
+## Environment Variables
+
+- \`OPENAI_API_KEY\`: Required for PandasAI chat feature
+`
+    };
+
+    // ============ DOM ELEMENTS ============
+    const tabs = document.querySelectorAll('.tab');
+    const panels = document.querySelectorAll('.panel');
+    const dropZone = document.getElementById('dropZone');
+    const fileInput = document.getElementById('fileInput');
+    const uploadStatus = document.getElementById('uploadStatus');
+    const edaContent = document.getElementById('edaContent');
+    const chartType = document.getElementById('chartType');
+    const xColumn = document.getElementById('xColumn');
+    const yColumn = document.getElementById('yColumn');
+    const generateChart = document.getElementById('generateChart');
+    const chartContainer = document.getElementById('chartContainer');
+    const chatMessages = document.getElementById('chatMessages');
+    const chatInput = document.getElementById('chatInput');
+    const sendChat = document.getElementById('sendChat');
+    const codeTabs = document.querySelectorAll('.code-tab');
+    const codeDisplay = document.getElementById('codeDisplay');
+    const copyCode = document.getElementById('copyCode');
+
+    // ============ TAB SWITCHING ============
+    tabs.forEach(tab => {
+      tab.addEventListener('click', () => {
+        tabs.forEach(t => t.classList.remove('active'));
+        panels.forEach(p => p.classList.remove('active'));
+        tab.classList.add('active');
+        document.getElementById(tab.dataset.tab).classList.add('active');
+      });
+    });
+
+    // ============ FILE UPLOAD ============
+    dropZone.addEventListener('click', () => fileInput.click());
+
+    dropZone.addEventListener('dragover', (e) => {
+      e.preventDefault();
+      dropZone.classList.add('dragover');
+    });
+
+    dropZone.addEventListener('dragleave', () => {
+      dropZone.classList.remove('dragover');
+    });
+
+    dropZone.addEventListener('drop', (e) => {
+      e.preventDefault();
+      dropZone.classList.remove('dragover');
+      const file = e.dataTransfer.files[0];
+      if (file) uploadFile(file);
+    });
+
+    fileInput.addEventListener('change', (e) => {
+      const file = e.target.files[0];
+      if (file) uploadFile(file);
+    });
+
+    async function uploadFile(file) {
+      if (!file.name.endsWith('.csv')) {
+        showStatus('error', 'Please upload a CSV file');
+        return;
+      }
+
+      showStatus('loading', '<span class="spinner"></span> Uploading and analyzing...');
+
+      const formData = new FormData();
+      formData.append('file', file);
+
+      try {
+        const res = await fetch(`${API_URL}/upload`, {
+          method: 'POST',
+          body: formData
+        });
+
+        const data = await res.json();
+
+        if (data.error) {
+          showStatus('error', data.error);
+          return;
+        }
+
+        edaData = data.eda;
+        columns = data.eda.column_names;
+
+        showStatus('success', `✅ Uploaded: ${file.name} (${edaData.rows} rows, ${edaData.columns} columns)`);
+        renderEDA();
+        populateColumnSelects();
+        enableChat();
+
+      } catch (err) {
+        showStatus('error', `❌ Error: ${err.message}. Make sure Flask backend is running on port 5000.`);
+      }
+    }
+
+    function showStatus(type, message) {
+      uploadStatus.className = `status ${type}`;
+      uploadStatus.innerHTML = message;
+    }
+
+    // ============ EDA RENDERING ============
+    function renderEDA() {
+      if (!edaData) return;
+
+      let html = `
+        <div class="stats-grid">
+          <div class="stat-card"><h4>Rows</h4><p>${edaData.rows.toLocaleString()}</p></div>
+          <div class="stat-card"><h4>Columns</h4><p>${edaData.columns}</p></div>
+          <div class="stat-card"><h4>Duplicates</h4><p>${edaData.duplicates}</p></div>
+          <div class="stat-card"><h4>Memory</h4><p>${edaData.memory_mb} MB</p></div>
+        </div>
+
+        <div class="section">
+          <h3>📋 Column Information</h3>
+          <div class="table-container">
+            <table>
+              <tr><th>Column</th><th>Type</th><th>Missing</th></tr>
+              ${edaData.column_names.map(col => `
+                <tr>
+                  <td>${col}</td>
+                  <td>${edaData.dtypes[col]}</td>
+                  <td>${edaData.missing[col]}</td>
+                </tr>
+              `).join('')}
+            </table>
+          </div>
+        </div>
+
+        <div class="section">
+          <h3>👀 Data Preview (First 10 Rows)</h3>
+          <div class="table-container">
+            <table>
+              <tr>${edaData.column_names.map(c => `<th>${c}</th>`).join('')}</tr>
+              ${edaData.preview.map(row => `
+                <tr>${edaData.column_names.map(c => `<td>${row[c] ?? ''}</td>`).join('')}</tr>
+              `).join('')}
+            </table>
+          </div>
+        </div>
+
+        <div class="section">
+          <h3>📊 Descriptive Statistics</h3>
+          <div class="table-container">
+            <table>
+              <tr><th>Stat</th>${Object.keys(edaData.describe).map(c => `<th>${c}</th>`).join('')}</tr>
+              ${['count', 'mean', 'std', 'min', '25%', '50%', '75%', 'max'].map(stat => `
+                <tr>
+                  <td><strong>${stat}</strong></td>
+                  ${Object.keys(edaData.describe).map(c => `
+                    <td>${edaData.describe[c][stat] !== undefined ?
+                      (typeof edaData.describe[c][stat] === 'number' ?
+                        edaData.describe[c][stat].toFixed(2) : edaData.describe[c][stat]) : '-'}</td>
+                  `).join('')}
+                </tr>
+              `).join('')}
+            </table>
+          </div>
+        </div>
+      `;
+
+      edaContent.innerHTML = html;
+    }
+
+    // ============ VISUALIZATION ============
+    function populateColumnSelects() {
+      xColumn.innerHTML = columns.map(c => `<option value="${c}">${c}</option>`).join('');
+      yColumn.innerHTML = `<option value="">-- None --</option>` +
+        columns.map(c => `<option value="${c}">${c}</option>`).join('');
+    }
+
+    generateChart.addEventListener('click', async () => {
+      generateChart.disabled = true;
+      generateChart.innerHTML = '<span class="spinner"></span> Generating...';
+
+      try {
+        const res = await fetch(`${API_URL}/visualize`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            chart_type: chartType.value,
+            x_column: xColumn.value,
+            y_column: yColumn.value
+          })
+        });
+
+        const data = await res.json();
+
+        if (data.error) {
+          chartContainer.innerHTML = `<div class="empty">❌ ${data.error}</div>`;
+        } else {
+          chartContainer.innerHTML = `<img src="${data.image}" alt="Chart">`;
+        }
+      } catch (err) {
+        chartContainer.innerHTML = `<div class="empty">❌ ${err.message}</div>`;
+      }
+
+      generateChart.disabled = false;
+      generateChart.innerHTML = 'Generate Chart';
+    });
+
+    // ============ CHAT ============
+    function enableChat() {
+      chatInput.disabled = false;
+      sendChat.disabled = false;
+    }
+
+    async function sendMessage() {
+      const query = chatInput.value.trim();
+      if (!query) return;
+
+      // Add user message
+      chatMessages.innerHTML += `<div class="message user">${query}</div>`;
+      chatInput.value = '';
+      chatMessages.scrollTop = chatMessages.scrollHeight;
+
+      // Add loading
+      const loadingId = Date.now();
+      chatMessages.innerHTML += `<div class="message bot" id="msg-${loadingId}"><span class="spinner"></span> Thinking...</div>`;
+      chatMessages.scrollTop = chatMessages.scrollHeight;
+
+      try {
+        const res = await fetch(`${API_URL}/chat`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ query })
+        });
+
+        const data = await res.json();
+        const msgEl = document.getElementById(`msg-${loadingId}`);
+
+        if (data.error) {
+          msgEl.innerHTML = `❌ ${data.error}`;
+        } else {
+          let html = data.response;
+          if (data.image) {
+            html += `<img src="${data.image}" alt="Chart">`;
+          }
+          if (data.response && data.response.includes('\n')) {
+            html = `<pre>${data.response}</pre>`;
+            if (data.image) html += `<img src="${data.image}" alt="Chart">`;
+          }
+          msgEl.innerHTML = html;
+        }
+      } catch (err) {
+        document.getElementById(`msg-${loadingId}`).innerHTML = `❌ ${err.message}`;
+      }
+
+      chatMessages.scrollTop = chatMessages.scrollHeight;
+    }
+
+    sendChat.addEventListener('click', sendMessage);
+    chatInput.addEventListener('keypress', (e) => {
+      if (e.key === 'Enter') sendMessage();
+    });
+
+    // ============ BACKEND CODE ============
+    function showCode(file) {
+      codeDisplay.textContent = backendCode[file];
+    }
+
+    codeTabs.forEach(tab => {
+      tab.addEventListener('click', () => {
+        codeTabs.forEach(t => t.classList.remove('active'));
+        tab.classList.add('active');
+        showCode(tab.dataset.file);
+      });
+    });
+
+    copyCode.addEventListener('click', () => {
+      const activeTab = document.querySelector('.code-tab.active');
+      navigator.clipboard.writeText(backendCode[activeTab.dataset.file]);
+      copyCode.textContent = '✅ Copied!';
+      setTimeout(() => copyCode.textContent = '📋 Copy', 2000);
+    });
+
+    // Initialize with app.py
+    showCode('app');
+  </script>
+</body>
+</html>
+index.html(btw just analyse this file once cause it contains a python backend script so i need to find out whether it is sam as that app.py)
